@@ -1,0 +1,22 @@
+
+Baselib is a small library for handling basic data structures:
+
+ - vectors (low-level dynamic arrays)
+ - slices (better dynamic arrays)
+ - fifo (first in, first out queue enqueing single items or a slice of items)
+ - queue (fifo or lifo queues, enqueing single items at head or tail).
+ - map (hash table, taking a user hash function)
+ - fnv (efficient hash function implementation)
+ - heap (heap management for priority queues or heap sort).
+
+The static library is baselib.a and the following header files provide the
+external interfaces:
+
+ - vector.h (_vector.h for a faster, no argument-checking, inline version)
+ - slice.h (_slice.h for a faster, no argument-checking, inline version)
+ - fifo.h
+ - queue.h
+ - map.h
+ - fnv.h
+ - heap.h
+
