@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <sys/types.h>
 /*
     Vectors are dynamic arrays. They provide constant read/update access time
     in O(1) within the array, while appending items with an amortized constant
@@ -79,6 +80,11 @@ extern vector_t *vector_grow( vector_t *vector );
 // if the index is equal or larger than its length.
 extern void * vector_item_at( const vector_t *vector, size_t index );
 
+// move items in the range [start, end] (both included) to a position shifted
+// to the right by the value offset. This intended to support inserting and
+// deleting items in the vector. It return 0 in case of success, -1 otherwise.
+extern int vector_move_items( vector_t *vector,
+                              size_t start, size_t end, ssize_t offset );
 // In the special case of a vector containing a C string (zero terminated char
 // array), as a convenience vector_read_string provides a direct access to the
 // internal string (it is equivalent to (char *)vector_item_at( vector, 0 )).

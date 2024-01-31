@@ -54,6 +54,15 @@ extern slice_t *new_slice_from_slice( const slice_t *slice,
     return new_slice;
 }
 
+extern slice_t *slice_dup( const slice_t * slice )
+{
+    if ( NULL == slice ) {
+        return NULL;
+    }
+    return new_slice_from_slice( slice, 0, slice->len );
+}
+
+
 // set all items in the slice [0..len] to 0.
 extern void slice_zero( slice_t *slice ) {
     if ( NULL != slice ) {
@@ -123,6 +132,67 @@ extern int pointer_slice_write_item_at( slice_t *slice,
     if ( NULL == slice || _vector_item_size(slice->vector) != sizeof(void *) ||
          index >= slice->len ) return -1;
     _pointer_slice_write_item_at( slice, index, data );
+    return 0;
+}
+
+static inline int _slice_insert_hole( slice_t *slice, size_t index )
+{
+    if ( NULL == slice || index > slice->len ) return -1;
+    if ( ! _slice_make_room( slice ) ) return -1;
+
+    if ( index < slice->len ) {
+        if ( -1 == vector_move_items( slice->vector,
+                slice->start + index, slice->start + slice->len-1, 1 ) ) {
+            return -1;
+        }
+    }
+    ++slice->len;
+    return 0;
+}
+
+extern int slice_insert_item_at( slice_t *slice, size_t index,
+                                 const void *data )
+{
+    if ( NULL == data || -1 == _slice_insert_hole( slice, index ) ) {
+        return -1;
+    }
+    _slice_write_item_at( slice, index, data );
+    return 0;
+}
+
+extern int pointer_slice_insert_item_at( slice_t *slice, size_t index,
+                                         const void *data )
+{
+    if ( NULL == data || -1 == _slice_insert_hole( slice, index ) ) {
+        return -1;
+    }
+    _pointer_slice_write_item_at( slice, index, data );
+    return 0;
+}
+
+extern int slice_remove_item_at( slice_t *slice, size_t index )
+{
+    if ( NULL == slice || index >= slice->len ) return -1;
+    if ( -1 == vector_move_items( slice->vector,
+                    slice->start + index, slice->start + slice->len, -1 ) ) {
+        return -1;
+    }
+    return 0;
+}
+
+extern int slice_move_items_from( slice_t *slice,
+                                  size_t index, size_t len, ssize_t offset )
+{
+    if ( NULL == slice || index + len > slice->len ||
+        (ssize_t)index + offset < 0 ||
+        (ssize_t)index + (ssize_t)len + offset > (ssize_t)slice->len ) {
+        return -1;
+    }
+    if ( -1 == vector_move_items( slice->vector,
+                                  slice->start + index,
+                                  slice->start + index + len-1, offset ) ) {
+        return -1;
+    }
     return 0;
 }
 
@@ -235,6 +305,17 @@ extern void slice_process_items( const slice_t *slice, item_process_fct fct,
                           context );
 }
 
+extern int pointer_slice_free( slice_t *slice )
+{
+    if ( NULL == slice ) return -1;
+
+    size_t n = slice_len( slice );
+    for ( size_t i = 0; i < n; ++i ) {
+        free( pointer_slice_item_at( slice, i ) );
+    }
+    return slice_free( slice );
+}
+
 extern bool slice_sort_items( slice_t *slice, comp_fct cmp )
 {
     if ( NULL == slice || NULL == cmp ) {
@@ -252,4 +333,3 @@ extern void pointer_slice_process_items( const slice_t *slice,
     pointer_vector_process_items( slice->vector, fct,
                                   slice->start, slice->len, context );
 }
-

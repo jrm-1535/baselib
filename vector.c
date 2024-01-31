@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <string.h>
+#include <sys/types.h>
 
 #include "vector.h"
 #include "_vector.h"
@@ -108,6 +109,21 @@ extern int pointer_vector_write_item_at( vector_t *vector,
     if ( NULL == vector || sizeof(void *) != vector->item_size ||
          index >= vector->number ) return -1;
     _pointer_vector_write_item_at( vector, index, data );
+    return 0;
+}
+
+extern int vector_move_items( vector_t *vector,
+                              size_t start, size_t end, ssize_t offset )
+{
+    if ( NULL == vector || start > end || (ssize_t)start+offset < 0 ||
+                        (ssize_t)end+offset >= (ssize_t)vector->number )
+        return -1;
+
+    if ( 0 == offset ) return 0;
+
+    uint8_t * dest = _vector_index_ptr_at( vector, start + offset );
+    uint8_t * src = _vector_index_ptr_at( vector, start );
+    memmove( dest, src, (end-start+1) * vector->item_size );
     return 0;
 }
 

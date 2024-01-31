@@ -25,7 +25,7 @@ static inline void _vector_zero( vector_t *vector )
 static inline void _vector_segment_zero( vector_t * vector,
                                          size_t start, size_t len )
 {
-    if ( start + len < vector->number ) {
+    if ( start + len <= vector->number ) {
         memset( (void *)((char *)vector->data + vector->item_size * start), 0,
                  vector->item_size * len );
     }
@@ -59,7 +59,7 @@ static inline void _pointer_vector_write_item_at( vector_t *vector,
                                                   size_t index,
                                                   const void *data )
 {
-    *(void **)_vector_index_ptr_at( vector, index ) =(void *)data;
+    *(void **)_vector_index_ptr_at( vector, index ) = (void *)data;
 }
 
 

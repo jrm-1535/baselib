@@ -35,14 +35,18 @@
             char_value = *(char *)slice_item_at( slice, index );
 
     In case the slice contains pointer to objects, a more convenient
-    interface, slice_vector_xxx, is provided to avoid double indirections
+    interface, pointer_slice_xxx, is provided to avoid double indirections
     (pointer to pointers). In this case, the objects pointed to are NOT freed
-    automatically when the slice is freed. This has to be done before hand by
-    freeing each pointer manually:
+    automatically when the slice is freed by calling slice_free.
 
-        for ( size_t i = 0; i < slice_cap( s ); ++i ) {
+    This can be done before hand by freeing each pointer manually:
+
+        for ( size_t i = 0; i < slice_len( s ); ++i ) {
             free( pointer_slice_item_at( s, i ) );
         }
+
+    or by calling instead pointer_slice_free( s ), which does free each
+    pointer before freeing the whole slice.
 */
 
 typedef struct slice slice_t;
@@ -71,6 +75,16 @@ extern slice_t *new_slice_with_vector( vector_t *vector, size_t number );
 extern slice_t *new_slice_from_slice( const slice_t *slice,
                                       size_t start, size_t beyond );
 
+// create a new slice identical to the given slice. The newly created slice
+// shares its array with the original slice, and has the same start and length
+// as the original slice. Modifying any of the two slice may increase the
+// shared array size, which will result in making a new array for one of the
+// slices. If however the current array size is sufficient, then the same array
+// stays shared by the two slices. SInce the array reference count is
+// incremented when the new slice is created, it is possible to free each of
+// those slices without interfering with the other.
+extern slice_t *slice_dup( const slice_t * slice );
+
 // set all items in the slice [0..len] to 0 or NULL pointers.
 extern void slice_zero( slice_t *slice );
 
@@ -94,12 +108,34 @@ extern size_t slice_item_size( const slice_t * slice );
 extern void *slice_item_at( const slice_t *slice, size_t index );
 
 // slice_write_item_at makes a copy of the data pointed to by the void pointer
-// data into the slice array at the given index. The index must be less than 
+// data into the slice array at the given index. The index must be less than
 // the current slice length to succeed (use instead slice_append_item to write
 // the item at the current length). It returns 0 in case of success or -1 if
 // slice is invalid or index is not in range.
 extern int slice_write_item_at( slice_t *slice,
                                 size_t index, const void *data );
+
+// slice_insert_item_at extends the current slice length by one and moves up
+// the content of the slice starting at index till the end of the slice in
+// order to make room for the new data. It then writes a copy of the data
+// pointed to by the void pointer data into the slice array at the given index.
+// If the given index is the current length it behaves as slice_append_item.
+// It returns -1 if index is bigger then the current length, otherwise 0.
+extern int slice_insert_item_at( slice_t *slice, size_t index,
+                                 const void *data );
+
+// slice_remove_item_at compacts the slice items by moving all items above the
+// index 1 item back and then shrinks the current slice length by one. It
+// returns 0 in case of success or -1 otherwise,
+extern int slice_remove_item_at( slice_t *slice, size_t index );
+
+// slice_move_items_from modifies a slice by moving all items between index and
+// index+len-1 to the new position between index+offset and index+len-1+offset.
+// This will overwrite |offset| items, which may need to be temporarily saved
+// by the caller before, if they are needed. It returns 0 in case of success
+// or -1 otherwise,
+extern int slice_move_items_from( slice_t *slice,
+                                  size_t index, size_t len, ssize_t offset );
 
 // slice_swap_items exchanges the values of 2 items. It returns 0 in case of
 // success or -1 if any item index is out of range
@@ -107,11 +143,13 @@ extern int slice_swap_items( slice_t *slice, size_t index1, size_t index2 );
 
 // append an item to the end of the slice, i.e. at start + length. The length
 // is first incremented, which migh require allocating more space to the array.
-// In that case, the slice capacity is increased as well.
+// In that case, the slice capacity is increased as well. It returns 0 in case
+// of success or -1 otherwise.
 extern int slice_append_item( slice_t *slice_t, const void *data );
 
 // free the slice. If the underlying array is not shared with any other slice,
-// it is deleted as well, otherwise its reference count is just decremented.
+// it is deleted as well, otherwise its reference count is just decremented. It
+// returns 0 in case of success, or -1 otherwise (bad slice argument).
 extern int slice_free( slice_t *slice );
 
 // slice_process_items processes all items in slice by calling the function
@@ -142,16 +180,25 @@ extern void * pointer_slice_item_at( const slice_t *slice, size_t index );
 extern int pointer_slice_write_item_at( slice_t *slice, size_t index,
                                         const void *data );
 
+// similar to slice_insert_item_at for pointer slices.  The argument data is
+// the pointer to write, not a pointer to the pointer as it would be with a
+// call to slice_insert_item_at.
+extern int pointer_slice_insert_item_at( slice_t *slice, size_t index,
+                                         const void *data );
+
 // Similar to slice_append_item for pointer slices. The argument data is the
 // pointer to append, not a pointer to the pointer as it would be with a call
 // to slice_append_item.
 extern int pointer_slice_append_item( slice_t *slice_t, const void *data );
 
-// Similar to slice_process_items for pointer vectors. The data passed to the
-// item_process_fct is the pointer in the vector, not a pointer to the pointer
+// Similar to slice_process_items for pointer slices. The data passed to the
+// item_process_fct is the pointer in the slice, not a pointer to the pointer
 // as it would be with a call to vector_process_items.
 extern void pointer_slice_process_items( const slice_t *slice,
                                          item_process_fct fct,
                                          void * context );
 
+// similar to slice_free except that it first frees all pointers in the slice
+// before freeing the slice.
+extern int pointer_slice_free( slice_t *slice );
 #endif /* __SLICE_H__ */
