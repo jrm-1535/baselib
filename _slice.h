@@ -9,9 +9,22 @@
 
 struct slice {
     vector_t    *vector;
+    void        *use;       // allow checking actual types and/or private data
     size_t      start;
     size_t      len;
 };
+
+static inline void *_slice_set_use( slice_t *slice, void * use )
+{
+    void *prev = slice->use;
+    slice->use = use;
+    return prev;
+}
+
+static inline void *_slice_get_use( slice_t *slice )
+{
+    return slice->use;
+}
 
 static inline void _slice_update_len( slice_t *slice, size_t len )
 {

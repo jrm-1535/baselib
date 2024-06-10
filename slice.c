@@ -70,6 +70,22 @@ extern void slice_zero( slice_t *slice ) {
     }
 }
 
+extern void *slice_set_use( slice_t *slice, void *use )
+{
+    if ( NULL == slice ) {
+        return NULL;
+    }
+    return _slice_set_use( slice, use );
+}
+
+extern void *slice_get_use( slice_t *slice )
+{
+    if ( NULL == slice ) {
+        return NULL;
+    }
+    return _slice_get_use( slice );
+}
+
 // update the slice length, as long as it fits in [0..cap]
 extern int slice_update_len( slice_t *slice, size_t len )
 {
@@ -312,6 +328,7 @@ extern int pointer_slice_free( slice_t *slice )
     size_t n = slice_len( slice );
     for ( size_t i = 0; i < n; ++i ) {
         free( pointer_slice_item_at( slice, i ) );
+        pointer_write_item_at( slice, NULL ); // in case of shared vector
     }
     return slice_free( slice );
 }

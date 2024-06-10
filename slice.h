@@ -85,8 +85,15 @@ extern slice_t *new_slice_from_slice( const slice_t *slice,
 // those slices without interfering with the other.
 extern slice_t *slice_dup( const slice_t * slice );
 
-// set all items in the slice [0..len] to 0 or NULL pointers.
+// set all items in the slice [0..len-1] to 0 or NULL pointers.
 extern void slice_zero( slice_t *slice );
+
+// set the privately defined use field, and return its previous value, If that
+// field points to allocated memory, it must be freed before calling slice_free
+extern void *slice_set_use( slice_t *slice, void *use );
+
+// return the privately defined use field.
+extern void *slice_get_use( slice_t *slice );
 
 // re-slice a slice by changing its length, as long as it stays in [0..cap].
 extern int slice_update_len( slice_t *slice, size_t len );
