@@ -328,7 +328,7 @@ extern int pointer_slice_free( slice_t *slice )
     size_t n = slice_len( slice );
     for ( size_t i = 0; i < n; ++i ) {
         free( pointer_slice_item_at( slice, i ) );
-        pointer_write_item_at( slice, NULL ); // in case of shared vector
+        pointer_slice_write_item_at( slice, i, NULL ); // in case of shared vector
     }
     return slice_free( slice );
 }
