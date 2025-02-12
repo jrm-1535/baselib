@@ -317,6 +317,7 @@ extern int slice_free( slice_t *slice )
 extern void slice_process_items( const slice_t *slice, item_process_fct fct,
                                  void *context )
 {
+    if ( NULL == slice || NULL == fct ) return;
     vector_process_items( slice->vector, fct, slice->start, slice->len,
                           context );
 }

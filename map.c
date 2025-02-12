@@ -259,7 +259,7 @@ static inline uint64_t hash_data( const void *key )
 static map_entry_t *get_entry( const map_t *map,
                                const void *key, uint64_t *hashp )
 {
-    if ( NULL == map ) {
+    if ( NULL == map || NULL == map->table ) {  // no map or empty map
         return NULL;
     }
 
@@ -276,10 +276,6 @@ static map_entry_t *get_entry( const map_t *map,
     uint32_t index = (uint32_t)(hash % map->modulo);
     map_entry_t *entry = &map->table[index];
 
-    if ( NULL == entry->key ) {     // not in use
-        return NULL;
-    }
-
     while( entry ) {
         if ( NULL != map->same_f ) {
             if ( map->same_f( entry->key, key ) )
@@ -292,6 +288,25 @@ static map_entry_t *get_entry( const map_t *map,
         entry = entry->next;
     }
     return entry;
+}
+
+// special case for multiple entries with the same key
+extern void map_process_entries_for_key( const map_t *map, const void *key,
+                                         multiple_entry_fct proc,
+                                         void *context )
+{
+    if ( NULL == map || NULL == proc ) return;
+    uint64_t hash = (NULL == map->hash_f) ? hash_data( key )
+                                          : map->hash_f( key );
+    uint32_t index = (uint32_t)(hash % map->modulo);
+    map_entry_t *entry = &map->table[index];
+    while ( entry ) {
+        if ( entry->key == key ) {  // can't use map->same since it ignores keys
+            proc( key, entry->data, context );
+        }
+        entry = entry->next;
+    }
+    proc( key, NULL, context ); // end of list
 }
 
 extern const void *map_lookup_entry( const map_t *map, const void *key )

@@ -161,7 +161,7 @@ extern int slice_free( slice_t *slice );
 
 // slice_process_items processes all items in slice by calling the function
 // fct (item_process_fct is defined in vector.h) passed as argument.
-// Processing the slice stops as soon as fct returns false, or at the end of
+// Processing the slice stops as soon as fct returns true, or at the end of
 // the slice.
 extern void slice_process_items( const slice_t *slice, item_process_fct fct,
                                  void *context );

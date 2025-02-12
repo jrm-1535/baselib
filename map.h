@@ -47,7 +47,7 @@ typedef bool (*same_fct)( const void *key1, const void *key2);
 // an enrey is inserted, otherwise a table is preallocated, sufficient for at
 // least the requested size entries. The collisions argument gives a threshold
 // for resizing automatically the table if the number of collisions reaches
-// that threshold. The minimum threshold accpeted is 4. If the hash function is
+// that threshold. The minimum threshold accepted is 4. If the hash function is
 // null, the hash value of a key is just its pointer cast as a size_t, which
 // may be fine for some cases. If the hash function is not null a same function
 // must be provided as well to tell whether two object keys are the same.
@@ -59,8 +59,9 @@ extern map_t *new_map( hash_fct hash, same_fct same,
 extern int map_free(map_t *map );
 
 // insert a new entry in the map. It returns true if the entry was inserted, or
-// false, which can only happen if an entry already exists for that key or if
-// the map requires a re-allocation that failed (no memory).
+// false, which can only happen if an entry already exists for that same key
+// (according to the result of calling same_fct if given to new_map) or if the
+// map requires a re-allocation that failed (no memory).
 extern bool map_insert_entry( map_t *map, const void *key, const void *value );
 
 // delete an existing entry in the map. It returns false if the entry did not
@@ -73,6 +74,23 @@ extern const void *map_lookup_entry( const map_t *map, const void *key );
 
 // return the current number of entries in map
 extern size_t map_len( const map_t *map );
+
+// execute the passed function for all entries associated with the given key.
+// This is useful for the very rare case where collisions are created on
+// purpose by giving the same key for different values, which is only possible
+// if the same_fct function given to new_map always returns false, regardless
+// the keys. In that case a regular call to map_lookup_entry always fails as
+// well and the only way to find out the values for a given key is to call
+// map_process_entries_for_key. Since same_fct is useless, key pointers are
+// directly compared, and only entries matching the requested key pointer are
+// returned. When the last value associated with the key has been processed,
+// an extra call to multiple_entry_fct is done with NULL data to indicate the
+// end of the list.
+typedef void (*multiple_entry_fct)(const void *key, const void *data,
+                                   void *context);
+extern void map_process_entries_for_key( const map_t *map, const void *key,
+                                         multiple_entry_fct proc,
+                                         void *context );
 
 // execute the passed function for all entries in the map. This could be used
 // to free keys and data allocated in memory before freeing the whole map. The
