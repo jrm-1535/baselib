@@ -12,7 +12,7 @@ typedef struct _map_entry {
     struct _map_entry *next;    // linked list in case of collisions
     const void         *key;    // NULL for an unused entry in table
     const void         *data;
-    uint64_t            hash;   // 0 for an unused entry in table
+    uint64_t            hash;
 } map_entry_t;
 
 struct map {
@@ -21,7 +21,6 @@ struct map {
     same_fct            same_f;
     uint32_t            nb;
     uint32_t            allocated;
-    uint32_t            modulo;
     uint32_t            max_collision;
     uint32_t            threshold;
 };
@@ -30,62 +29,51 @@ struct map {
 #define MIN_MODULO      7       // largest prime less then MIN_ALLOCATED
 #define MIN_COLLISIONS  4       // Allways accept at least MIN_COLLISIONS
 
-static uint32_t get_prime( uint32_t size )
+static uint32_t get_prime( uint32_t new_size )
 {
-  uint32_t i;
-  static const uint32_t greatest_prime[] = {
-    1,          /* 1 */
-    2,          /* 2 */
-    3,          /* 4 */
-    7,          /* 8 */
-    13,         /* 16 */
-    31,         /* 32 */
-    61,         /* 64 */
-    127,        /* 128 */
-    251,        /* 256 */
-    509,        /* 512 */
-    1021,       /* 1024 */
-    2039,       /* 2048 */
-    4093,       /* 4096 */
-    8191,       /* 8192 */
-    16381,      /* 16384 */
-    32749,      /* 32768 */
-    65521,      /* 65536 */
-    131071,     /* 131072 */
-    262139,     /* 262144 */
-    524287,     /* 524288 */
-    1048573,    /* 1048576 */
-    2097143,    /* 2097152 */
-    4194301,    /* 4194304 */
-    8388593,    /* 8388608 */
-    16777213,   /* 16777216 */
-    33554393,   /* 33554432 */
-    67108859,   /* 67108864 */
-    134217689,  /* 134217728 */
-    268435399,  /* 268435456 */
-    536870909,  /* 536870912 */
-    1073741789, /* 1073741824 */
-    2147483647, /* 2147483648 */
-//    4294967291  /* 4294967296 */
-  };
+    assert( new_size >= MIN_ALLOCATED );
+    static const uint64_t greatest_prime[] = {
+        /* first prime for MIN_ALLOCATED */
+        7,          /* 8 */
+        13,         /* 16 */
+        31,         /* 32 */
+        61,         /* 64 */
+        127,        /* 128 */
+        251,        /* 256 */
+        509,        /* 512 */
+        1021,       /* 1024 */
+        2039,       /* 2048 */
+        4093,       /* 4096 */
+        8191,       /* 8192 */
+        16381,      /* 16384 */
+        32749,      /* 32768 */
+        65521,      /* 65536 */
+        131071,     /* 131072 */
+        262139,     /* 262144 */
+        524287,     /* 524288 */
+        1048573,    /* 1048576 */
+        2097143,    /* 2097152 */
+        4194301,    /* 4194304 */
+        8388593,    /* 8388608 */
+        16777213,   /* 16777216 */
+        33554393,   /* 33554432 */
+        67108859,   /* 67108864 */
+        134217689,  /* 134217728 */
+        268435399,  /* 268435456 */
+        536870909,  /* 536870912 */
+        1073741789, /* 1073741824 */
+        2147483647, /* 2147483648 */
+        4294967291, /* 4294967296 */
+        8589934592  /* sentinel above max uint32_t */
+    };
 
-  /* assuming size is a power of 2 */
-  for ( i = 0; size ; i++ ) size >>= 1;
-  return greatest_prime[i-1];
-}
-
-static uint32_t round_up_2power( uint32_t size )
-{
-    uint32_t ro = MIN_ALLOCATED;
-
-    while ( true ) {
-        if ( ro >= size )
+    unsigned int i;
+    for ( i = 1; i < sizeof(greatest_prime)/sizeof(uint64_t); ++i ) {
+        if ( (uint64_t)new_size <= greatest_prime[i] ) {
             break;
-        if ( ro == 0x80000000 )
-            break;
-        ro <<= 1;
+        }
     }
-    return ro;
+    return (uint32_t)greatest_prime[i-1];
 }
 
 extern map_t *new_map( hash_fct hash, same_fct same,
@@ -97,7 +85,7 @@ extern map_t *new_map( hash_fct hash, same_fct same,
     }
 
     if ( 0 != size ) {
-        size = round_up_2power( size );
+        size = get_prime( size ); // allocate just enough for modulo
         map_entry_t *table = malloc( sizeof(map_entry_t) * size );
         if ( NULL == table ) {
             free( map );
@@ -106,11 +94,9 @@ extern map_t *new_map( hash_fct hash, same_fct same,
         memset( (void *)table, 0, sizeof(map_entry_t) * size );
         map->table = table;
         map->allocated = size;
-        map->modulo = get_prime( size );
     } else {
         map->table = NULL;
         map->allocated = 0;
-        map->modulo = MIN_MODULO;
     }
     map->hash_f = hash;
     map->same_f = same;
@@ -150,10 +136,15 @@ extern int map_free( map_t *map )
     return 0;
 }
 
-static unsigned int add_entry( map_entry_t *entry, uint64_t hash,
-                               const void *key, const void *data )
+// insert an entry in a collision list and return the number of entries
+// in it after insertion, 0 if the entry could not be inserted, 1 if it
+// is a new collision list (no collision yet) or a positive number greater
+// than 1 in case of collisions.
+static uint32_t add_entry( map_entry_t *entry, uint64_t hash,
+                           const void *key, const void *data )
 {
-    unsigned int count = 0;
+    assert( NULL != key );
+    uint32_t count = 1;     // new entry will be added
 
     if ( entry->key ) {
         ++count;
@@ -163,88 +154,85 @@ static unsigned int add_entry( map_entry_t *entry, uint64_t hash,
         }
 
         map_entry_t *new_entry = malloc( sizeof(map_entry_t) );
+        if ( NULL == new_entry ) {
+            return 0;
+        }
         entry->next = new_entry;
         entry = new_entry;
     }
-
     entry->next = NULL;
     entry->key  = key;
     entry->data = data;
     entry->hash = hash;
-
     return count;
 }
 
-static void rehash( map_t *map, uint32_t old_size, map_entry_t *new_table )
+static bool rehash( map_t *map, map_entry_t *new_table, uint32_t new_allocated )
 {
-  /* for each non-empty entry, apply the new modulo
-     and copy the old entry into the new location */
+  /* for each non-empty entry in the current table, apply the new allocated modulo
+     and copy the entry into the new table */
 
-    map->nb = 0;
-    for ( uint32_t i = 0; i < old_size; i ++ ) {
+    uint32_t nb = 0, max_chained = 0;
+    for ( uint32_t i = 0; i < map->allocated ; ++i ) {
         map_entry_t *entry = &map->table[ i ];
 
         if ( entry->key ) { /* a valid  entry */
-            bool first = true;
-
             while ( entry ) {
-                uint32_t index = (uint32_t)(entry->hash % map->modulo);
-                assert( index < map->allocated );
-                uint32_t collisions = add_entry( &new_table[ index ],
-                                                 entry->hash,
-                                                 entry->key, entry->data );
-
-                if ( map->max_collision < collisions )
-                    map->max_collision = collisions;
-
-                // free old collision list
-                map_entry_t *next = entry->next;
-                if ( ! first ) {
-                    free( entry );
-                } else {
-                    first = false;
+                uint32_t index = (uint32_t)(entry->hash % new_allocated);
+                assert( index < new_allocated );
+                uint32_t chained = add_entry( &new_table[ index ],
+                                              entry->hash,
+                                              entry->key, entry->data );
+                if ( 0 == chained ) {
+                    return false;   // keep old table as is
                 }
+                if ( max_chained < chained )
+                    max_chained = chained;
 
-                ++map->nb;
-                entry = next;
+                ++nb;
+                entry = entry->next;
             }
         }
     }
-    free( map->table );
+
+    free_table( map->table, map->allocated );
     map->table = new_table;
+    map->allocated = new_allocated;
+    map->max_collision = max_chained - 1;
+    map->nb = nb;
+    return true;
 }
 
-// returns +1 if the table has been sucessfully re-allocated, -1 if it failed
-// the re-allocation and 0 if it did not have to re-allocate the table.
+// returns +1 if the table has been sucessfully re-allocated, -1 if it failed the
+// re-allocation or rehashing and 0 if it did not have to re-allocate the table.
 static int make_room( map_t *map )
 {
     /* if less than 25% of entries left or more colliding entries than the
     // threshold in table, double the size */
     if ( ( 4 * (1 + map->nb) >= 3 * (map->allocated) ) ||
                             map->max_collision > map->threshold ) {
-        uint32_t old_size = map->allocated;
-
         /* starting from MIN_ALLOCATED, double the size */
-        if ( old_size == 0x80000000 ) {
+        if ( map->allocated >= 0x80000000 ) {
             return -1;          // no way to double it...
         }
-        uint32_t new_allocated = ( old_size ) ?  2 * old_size : MIN_ALLOCATED;
-
+        uint32_t new_allocated = get_prime(
+            ( map->allocated ) ?  2 * (map->allocated) : MIN_ALLOCATED );
         map_entry_t *new_table = malloc( sizeof(map_entry_t) * new_allocated );
         if ( NULL == new_table ) {
             return -1;          // no memory
         }
 
         memset( (void *)new_table, 0, sizeof(map_entry_t) * new_allocated );
-
-        map->allocated = new_allocated;
-        map->modulo = get_prime( new_allocated );
-        map->max_collision = 0;
-
         if ( map->table ) {
-            rehash ( map, old_size, new_table );
+            if ( ! rehash ( map, new_table, new_allocated ) ) {
+                free_table( new_table, new_allocated );
+                return -1;      // failed to rehash
+            }
         } else {
             map->table = new_table;
+            map->allocated = new_allocated;
+            map->max_collision = 0;
+            map->nb = 0;
         }
         return 1;
     }
@@ -259,7 +247,7 @@ static inline uint64_t hash_data( const void *key )
 static map_entry_t *get_entry( const map_t *map,
                                const void *key, uint64_t *hashp )
 {
-    if ( NULL == map || NULL == map->table ) {  // no map or empty map
+    if ( NULL == map ) {            // no map
         return NULL;
     }
 
@@ -269,11 +257,11 @@ static map_entry_t *get_entry( const map_t *map,
         *hashp = hash;
     }
 
-    if ( NULL == map->table ) {
+    if ( NULL == map->table ) {     // empty map
         return NULL;
     }
 
-    uint32_t index = (uint32_t)(hash % map->modulo);
+    uint32_t index = (uint32_t)(hash % map->allocated);
     map_entry_t *entry = &map->table[index];
 
     while( entry ) {
@@ -290,25 +278,6 @@ static map_entry_t *get_entry( const map_t *map,
     return entry;
 }
 
-// special case for multiple entries with the same key
-extern void map_process_entries_for_key( const map_t *map, const void *key,
-                                         multiple_entry_fct proc,
-                                         void *context )
-{
-    if ( NULL == map || NULL == proc ) return;
-    uint64_t hash = (NULL == map->hash_f) ? hash_data( key )
-                                          : map->hash_f( key );
-    uint32_t index = (uint32_t)(hash % map->modulo);
-    map_entry_t *entry = &map->table[index];
-    while ( entry ) {
-        if ( entry->key == key ) {  // can't use map->same since it ignores keys
-            proc( key, entry->data, context );
-        }
-        entry = entry->next;
-    }
-    proc( key, NULL, context ); // end of list
-}
-
 extern const void *map_lookup_entry( const map_t *map, const void *key )
 {
     map_entry_t *entry = get_entry( map, key, NULL );
@@ -320,16 +289,24 @@ extern const void *map_lookup_entry( const map_t *map, const void *key )
 
 extern bool map_insert_entry( map_t *map, const void *key, const void *data )
 {
+    if ( NULL == key || NULL == map ) {
+        return false;
+    }
     uint64_t hash;
     map_entry_t *entry = get_entry( map, key, &hash );
     if ( NULL != entry ) {
-        return false;
+        return false;                           // already in map
     }
     if ( -1 == make_room( map ) ) {             // extend if needed
         return false;                           // sorry, no memory
     }
-    uint32_t index = hash % map->modulo;    // possibly new index
+    uint32_t index = hash % map->allocated;     // possibly new index
     uint32_t collisions = add_entry( &map->table[index], hash, key, data );
+    if ( 0 == collisions ) {                    // unable to add entry
+        return false;
+    } else {
+        --collisions;
+    }
     if ( map->max_collision < collisions ) {
         map->max_collision = collisions;
     }
@@ -347,7 +324,7 @@ extern bool map_delete_entry( map_t *map, const void *key )
         return false;
     }
 
-    uint32_t index = hash % map->modulo;
+    uint32_t index = hash % map->allocated;
     map_entry_t *prev = NULL, *cur = &map->table[index];
     while ( cur != entry ) {
         prev = cur;
@@ -378,7 +355,7 @@ extern slice_t *map_keys( const map_t *map, comp_fct cmp )
     slice_t *slice = new_slice( sizeof( void *), map->nb );
     if ( NULL == slice ) return NULL;
 
-    for ( uint32_t i = 0; i < map->allocated; i ++ ) {
+    for ( uint32_t i = 0; i < map->allocated; ++i ) {
         map_entry_t *entry = &map->table[ i ];
         if ( entry->key ) {
             while ( entry ) {
@@ -415,7 +392,6 @@ extern void map_stats( const map_t *map )
     printf( "Map %p stats\n", (void *)map );
     printf( "  entries          %d\n", map->nb );
     printf( "  allocated room   %d\n", map->allocated );
-    printf( "  modulo           %d\n", map->modulo );
     printf( "  max collisions   %d\n\n", map->max_collision );
 
     printf( "  Entries {\n" );
@@ -435,4 +411,3 @@ extern void map_stats( const map_t *map )
     }
     printf( "  }\n");
 }
-

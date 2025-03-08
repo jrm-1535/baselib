@@ -17,7 +17,8 @@
 
     It does not require that keys are of any particular type. In fact, keys
     are never directly accessed and key "pointers" could also be used to hold
-    any type that can fit in a void pointer.
+    any type that can fit in a void pointer. However, a NULL or (uint64_t)0
+    key is not valid as it indicates internally an empty slot in the table.
 
     The hash value is just derived from the key pointer value, by calling the
     hash function passed to the new_map when the map was created. If NULL was
@@ -59,9 +60,9 @@ extern map_t *new_map( hash_fct hash, same_fct same,
 extern int map_free(map_t *map );
 
 // insert a new entry in the map. It returns true if the entry was inserted, or
-// false, which can only happen if an entry already exists for that same key
-// (according to the result of calling same_fct if given to new_map) or if the
-// map requires a re-allocation that failed (no memory).
+// false, which can only happen if the key is NULL, an entry already exists for
+// that same key (according to the result of calling same_fct if given to new
+//_map) or if the map requires a re-allocation that failed (no memory).
 extern bool map_insert_entry( map_t *map, const void *key, const void *value );
 
 // delete an existing entry in the map. It returns false if the entry did not
@@ -74,23 +75,6 @@ extern const void *map_lookup_entry( const map_t *map, const void *key );
 
 // return the current number of entries in map
 extern size_t map_len( const map_t *map );
-
-// execute the passed function for all entries associated with the given key.
-// This is useful for the very rare case where collisions are created on
-// purpose by giving the same key for different values, which is only possible
-// if the same_fct function given to new_map always returns false, regardless
-// the keys. In that case a regular call to map_lookup_entry always fails as
-// well and the only way to find out the values for a given key is to call
-// map_process_entries_for_key. Since same_fct is useless, key pointers are
-// directly compared, and only entries matching the requested key pointer are
-// returned. When the last value associated with the key has been processed,
-// an extra call to multiple_entry_fct is done with NULL data to indicate the
-// end of the list.
-typedef void (*multiple_entry_fct)(const void *key, const void *data,
-                                   void *context);
-extern void map_process_entries_for_key( const map_t *map, const void *key,
-                                         multiple_entry_fct proc,
-                                         void *context );
 
 // execute the passed function for all entries in the map. This could be used
 // to free keys and data allocated in memory before freeing the whole map. The
