@@ -287,6 +287,15 @@ extern const void *map_lookup_entry( const map_t *map, const void *key )
     return entry->data;
 }
 
+extern const void *map_lookup_key( const map_t *map, const void *key )
+{
+    map_entry_t *entry = get_entry( map, key, NULL );
+    if ( NULL == entry ) {
+        return NULL;
+    }
+    return entry->key;
+}
+
 extern bool map_insert_entry( map_t *map, const void *key, const void *data )
 {
     if ( NULL == key || NULL == map ) {

@@ -24,8 +24,9 @@
     hash function passed to the new_map when the map was created. If NULL was
     given as hash function to new_map, hashing is done by using directly the
     key pointer cast as uint64_t. In this case and if keys are real pointers to
-    memory objects, this assumes that each key object is stored at a different
-    address that will never change afterwards.
+    memory objects, this assumes that each key object is stored at a unique
+    address that will never change afterwards, and the only way to retrieve
+    the data is the same key pointer.
 
     Similarly, the data value is never directly accessed, and therefore the
     data pointer may contain any value that fits in a void pointer, in addition
@@ -33,6 +34,9 @@
     the object type can be anything and may even vary between entries (the
     caller has to manage how to deal with those various objects just based on
     their pointer).
+
+    Adding and deleting an entry in he map does not deal with allocating/freeing
+    keys or data pointers. It is up to the caller to do so.
 */
 
 typedef struct map map_t;
@@ -66,16 +70,23 @@ extern int map_free(map_t *map );
 extern bool map_insert_entry( map_t *map, const void *key, const void *value );
 
 // delete an existing entry in the map. It returns false if the entry did not
-// exist or true otherwise.
+// exist or true otherwise. Neither key nor data pointer is free. If needed,
+// use lookup_entry and lookup_key to get their pointer before calling
+// map_delete_entry and free them after.
 extern bool map_delete_entry( map_t *map, const void *key );
 
 // return the data pointer associated with the key. It returns NULL if the key
 // was not found in the map, otherwise the associated value.
 extern const void *map_lookup_entry( const map_t *map, const void *key );
 
+// return the key pointer matching the given key with the key. It returns NULL
+// if the key  was not found in the map, otherwise the key pointer that was
+// given when the enry was inserted in the map. It's main use is for freeing
+// keys when entries are deleted.
+extern const void *map_lookup_key( const map_t *map, const void *key );
+
 // return the current number of entries in map
 extern size_t map_len( const map_t *map );
-
 // execute the passed function for all entries in the map. This could be used
 // to free keys and data allocated in memory before freeing the whole map. The
 // order in which keys are processed is not guaranted, although all entries at
