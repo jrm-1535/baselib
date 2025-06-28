@@ -205,7 +205,14 @@ extern void pointer_slice_process_items( const slice_t *slice,
                                          item_process_fct fct,
                                          void * context );
 
+// similar to slice_free except that it first passes all pointers in the slice
+// to the function f before freeing the slice. It is intended for freeing
+// slices containing complex objects that must be cleaned before disposal.
+extern int pointer_slice_finalize( slice_t *slice, void (*f)( void *) );
+
 // similar to slice_free except that it first frees all pointers in the slice
-// before freeing the slice.
+// before freeing the slice. It is equivalent to calling pointer_slice_finalize
+// on the slice with the standard free function.
 extern int pointer_slice_free( slice_t *slice );
+
 #endif /* __SLICE_H__ */

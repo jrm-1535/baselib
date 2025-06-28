@@ -20,20 +20,21 @@ struct map {
     hash_fct            hash_f;
     same_fct            same_f;
     uint32_t            nb;
-    uint32_t            allocated;
+    uint32_t            allocated;  // prime number of allocated entries
+    uint64_t            n2power;    // 2 power immediately above allocated
     uint32_t            max_collision;
     uint32_t            threshold;
 };
 
-#define MIN_ALLOCATED   8       // must be power of 2
-#define MIN_MODULO      7       // largest prime less then MIN_ALLOCATED
-#define MIN_COLLISIONS  4       // Allways accept at least MIN_COLLISIONS
+#define MIN_POWER       3           // start at 2^3
+#define MIN_SIZE        (1<<MIN_POWER)
+#define MIN_COLLISIONS  4           // Allways accept at least MIN_COLLISIONS
 
-static uint32_t get_prime( uint32_t new_size )
+static uint32_t get_prime( uint32_t new_size, uint64_t *n2power )
 {
-    assert( new_size >= MIN_ALLOCATED );
+    assert( new_size >= MIN_SIZE );
     static const uint64_t greatest_prime[] = {
-        /* first prime for MIN_ALLOCATED */
+        /* start with prime for MIN_SIZE */
         7,          /* 8 */
         13,         /* 16 */
         31,         /* 32 */
@@ -73,7 +74,11 @@ static uint32_t get_prime( uint32_t new_size )
             break;
         }
     }
-    return (uint32_t)greatest_prime[i-1];
+    --i;
+    if ( NULL != n2power ) {
+        *n2power = ((uint64_t)1) << (MIN_POWER+i);
+    }
+    return (uint32_t)greatest_prime[i];
 }
 
 extern map_t *new_map( hash_fct hash, same_fct same,
@@ -85,7 +90,11 @@ extern map_t *new_map( hash_fct hash, same_fct same,
     }
 
     if ( 0 != size ) {
-        size = get_prime( size ); // allocate just enough for modulo
+        if ( size < MIN_SIZE ) {
+            size = MIN_SIZE;
+        }
+        uint64_t n2power;
+        size = get_prime( size, &n2power ); // allocate just enough for prime modulo
         map_entry_t *table = malloc( sizeof(map_entry_t) * size );
         if ( NULL == table ) {
             free( map );
@@ -94,9 +103,11 @@ extern map_t *new_map( hash_fct hash, same_fct same,
         memset( (void *)table, 0, sizeof(map_entry_t) * size );
         map->table = table;
         map->allocated = size;
+        map->n2power = n2power;
     } else {
         map->table = NULL;
         map->allocated = 0;
+        map->n2power = 0;
     }
     map->hash_f = hash;
     map->same_f = same;
@@ -167,7 +178,8 @@ static uint32_t add_entry( map_entry_t *entry, uint64_t hash,
     return count;
 }
 
-static bool rehash( map_t *map, map_entry_t *new_table, uint32_t new_allocated )
+static bool rehash( map_t *map, map_entry_t *new_table,
+                    uint32_t new_allocated, uint64_t n2power )
 {
   /* for each non-empty entry in the current table, apply the new allocated modulo
      and copy the entry into the new table */
@@ -198,6 +210,7 @@ static bool rehash( map_t *map, map_entry_t *new_table, uint32_t new_allocated )
     free_table( map->table, map->allocated );
     map->table = new_table;
     map->allocated = new_allocated;
+    map->n2power = n2power;
     map->max_collision = max_chained - 1;
     map->nb = nb;
     return true;
@@ -211,12 +224,14 @@ static int make_room( map_t *map )
     // threshold in table, double the size */
     if ( ( 4 * (1 + map->nb) >= 3 * (map->allocated) ) ||
                             map->max_collision > map->threshold ) {
-        /* starting from MIN_ALLOCATED, double the size */
-        if ( map->allocated >= 0x80000000 ) {
+        /* starting from MIN_SIZE, double the size */
+        if ( map->n2power >= (uint64_t)UINT32_MAX ) {
             return -1;          // no way to double it...
         }
+        uint64_t n2power;
         uint32_t new_allocated = get_prime(
-            ( map->allocated ) ?  2 * (map->allocated) : MIN_ALLOCATED );
+            ( map->n2power ) ?  2 * (map->n2power) : MIN_SIZE,
+            &n2power );
         map_entry_t *new_table = malloc( sizeof(map_entry_t) * new_allocated );
         if ( NULL == new_table ) {
             return -1;          // no memory
@@ -224,13 +239,14 @@ static int make_room( map_t *map )
 
         memset( (void *)new_table, 0, sizeof(map_entry_t) * new_allocated );
         if ( map->table ) {
-            if ( ! rehash ( map, new_table, new_allocated ) ) {
+            if ( ! rehash ( map, new_table, new_allocated, n2power ) ) {
                 free_table( new_table, new_allocated );
                 return -1;      // failed to rehash
             }
         } else {
             map->table = new_table;
             map->allocated = new_allocated;
+            map->n2power = n2power;
             map->max_collision = 0;
             map->nb = 0;
         }
@@ -247,7 +263,7 @@ static inline uint64_t hash_data( const void *key )
 static map_entry_t *get_entry( const map_t *map,
                                const void *key, uint64_t *hashp )
 {
-    if ( NULL == map ) {            // no map
+    if ( NULL == map || NULL == key ) {
         return NULL;
     }
 
@@ -298,7 +314,7 @@ extern const void *map_lookup_key( const map_t *map, const void *key )
 
 extern bool map_insert_entry( map_t *map, const void *key, const void *data )
 {
-    if ( NULL == key || NULL == map ) {
+    if ( NULL == key || NULL == map ) {         // needed as negative get_entry is expected
         return false;
     }
     uint64_t hash;
@@ -320,7 +336,6 @@ extern bool map_insert_entry( map_t *map, const void *key, const void *data )
         map->max_collision = collisions;
     }
     ++map->nb;
-
     return true;
 }
 

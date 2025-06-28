@@ -240,12 +240,23 @@ extern void *heap_extract_then_insert( heap_t *heap, void* data )
     return root_data;
 }
 
-static inline heap_t *new_heap_with_slice_n_cmp( slice_t *slice, cmp_fct cmp )
+extern heap_t *new_heap_from_slice( slice_t *slice, cmp_fct cmp )
 {
+    if ( NULL == slice || NULL == cmp ) {
+        return NULL;
+    }
+
     heap_t *heap = malloc( sizeof( heap_t ) );
     if ( NULL != heap ) {
         heap->slice = slice;
         heap->cmp = cmp;
+        size_t n = slice_len( slice );
+        if ( n > 1 ) {
+            size_t i = (n-1)/2;             // start from the bottom of the heap
+            do {                            // calls (n-1)/2 percolate_down(n)
+                percolate_down( heap, i );  // to establish the heap property
+            } while ( i-- );                // from the bottom up
+        }
     }
     return heap;
 }
@@ -257,7 +268,7 @@ extern heap_t *new_heap( size_t number, cmp_fct cmp )
     heap_t *heap = NULL;
     slice_t *slice = new_slice( sizeof( void *), number );
     if ( NULL != slice ) {
-        heap = new_heap_with_slice_n_cmp( slice, cmp );
+        heap = new_heap_from_slice( slice, cmp );
         if ( NULL == heap ) {
             slice_free( slice );
         }
@@ -278,14 +289,9 @@ extern heap_t *new_heap_from_data( const void **data,
     heap_t *heap = NULL;
     slice_t *slice = new_slice_from_data( data, sizeof( void *), number );
     if ( NULL != slice ) {
-        heap = new_heap_with_slice_n_cmp( slice, cmp );
+        heap = new_heap_from_slice( slice, cmp );
         if ( NULL == heap ) {
             slice_free( slice );
-        } else if ( number > 1 ) {
-            size_t i = (number-1)/2;    // start from the bottom of the heap
-            do {                        // calls (number-1)/2 percolate_down(n)
-                percolate_down( heap, i );  // to establish the heap property
-            } while ( i-- );                // from the bottom up
         }
     }
     return heap;
@@ -385,4 +391,3 @@ extern bool heap_check( const heap_t *heap )
     size_t item_size = _slice_item_size( heap->slice );
     return check_children( heap->slice, heap->cmp, item_size, n, 0 );
 }
-

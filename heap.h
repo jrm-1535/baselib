@@ -27,6 +27,7 @@
             operation               time complexity
         new empty heap                  O(1)
         new from data                   O(n)
+        new from slice                  O(n)
         insert                          O(log n)
         peek                            O(1)
         extract                         O(log n)
@@ -49,6 +50,8 @@ typedef struct heap heap_t;
 // cmp_fct needs just to return val(item1) - val(item2)
 typedef int (*cmp_fct)( void *item1, void *item2 );
 
+// create a new empty heap for an initial number of entries. Internally
+// a heap uses a slice that can grow as needed.
 extern heap_t *new_heap( size_t number, cmp_fct cmp );
 
 // create a hew heap for initially number (void *)elements and store the
@@ -57,6 +60,11 @@ extern heap_t *new_heap( size_t number, cmp_fct cmp );
 // is heapified. It returns the heap or a pointer if memory allocation fails.
 extern heap_t *new_heap_from_data( const void **data,
                                    size_t number, cmp_fct cmp );
+
+// create a new heap from the given pointer slice. Slice elements must be
+// pointers.The comparison function is used to compare those elements.
+// The slice is used for storage and items are heapiffied in place.
+extern heap_t *new_heap_from_pointer_slice( slice_t *slice, cmp_fct cmp );
 
 // free an existing heap, without freeing any object still pointed to by
 // elements in the heap.
@@ -108,4 +116,3 @@ extern void heap_process_items( const heap_t *heap, item_process_fct fct,
 
 // heap_check returns true if the heap is valid, false otherwise
 extern bool heap_check( const heap_t *heap );
-

@@ -322,8 +322,21 @@ extern void slice_process_items( const slice_t *slice, item_process_fct fct,
                           context );
 }
 
+extern int pointer_slice_finalize( slice_t *slice, void (*f)( void *) )
+{
+    if ( NULL == slice ) return -1;
+
+    size_t n = slice_len( slice );
+    for ( size_t i = 0; i < n; ++i ) {
+        f( pointer_slice_item_at( slice, i ) );
+        pointer_slice_write_item_at( slice, i, NULL ); // in case of shared vector
+    }
+    return slice_free( slice );
+}
+
 extern int pointer_slice_free( slice_t *slice )
 {
+/*
     if ( NULL == slice ) return -1;
 
     size_t n = slice_len( slice );
@@ -332,6 +345,8 @@ extern int pointer_slice_free( slice_t *slice )
         pointer_slice_write_item_at( slice, i, NULL ); // in case of shared vector
     }
     return slice_free( slice );
+*/
+    return pointer_slice_finalize( slice, free );
 }
 
 extern bool slice_sort_items( slice_t *slice, comp_fct cmp )
