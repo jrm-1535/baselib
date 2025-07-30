@@ -190,9 +190,10 @@ extern int slice_remove_item_at( slice_t *slice, size_t index )
 {
     if ( NULL == slice || index >= slice->len ) return -1;
     if ( -1 == vector_move_items( slice->vector,
-                    slice->start + index, slice->start + slice->len, -1 ) ) {
+                    slice->start + index +1, slice->start + slice->len, -1 ) ) {
         return -1;
     }
+    --slice->len;
     return 0;
 }
 
