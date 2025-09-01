@@ -279,6 +279,9 @@ static map_entry_t *get_entry( const map_t *map,
 
     uint32_t index = (uint32_t)(hash % map->allocated);
     map_entry_t *entry = &map->table[index];
+    if ( NULL == entry->key ) {
+        return NULL;
+    }
 
     while( entry ) {
         if ( NULL != map->same_f ) {
