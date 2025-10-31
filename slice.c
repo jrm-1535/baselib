@@ -323,6 +323,17 @@ extern void slice_process_items( const slice_t *slice, item_process_fct fct,
                           context );
 }
 
+extern int slice_finalize( slice_t *slice, void (*f)( void *) )
+{
+    if ( NULL == slice ) return -1;
+
+    size_t n = slice_len( slice );
+    for ( size_t i = 0; i < n; ++i ) {
+        f( slice_item_at( slice, i ) );
+    }
+    return slice_free( slice );
+}
+
 extern int pointer_slice_finalize( slice_t *slice, void (*f)( void *) )
 {
     if ( NULL == slice ) return -1;

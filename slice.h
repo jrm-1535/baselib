@@ -47,6 +47,11 @@
 
     or by calling instead pointer_slice_free( s ), which does free each
     pointer before freeing the whole slice.
+
+    For complex objects that contain pointers to other objects, it is possible
+    to call slice_finalize or pointer_slice_finalize instead of slice_free or
+    pointer_slice_free, in order to first clean each item object before freeing
+    the slice.
 */
 
 typedef struct slice slice_t;
@@ -158,6 +163,11 @@ extern int slice_append_item( slice_t *slice_t, const void *data );
 // it is deleted as well, otherwise its reference count is just decremented. It
 // returns 0 in case of success, or -1 otherwise (bad slice argument).
 extern int slice_free( slice_t *slice );
+
+// similar to slice_free except that it first passes a pointer to each item in
+// the slice to the function f before freeing the slice. It is intended for
+// freeing slices containing objects that must be cleaned before disposal.
+extern int slice_finalize( slice_t *slice, void (*f)( void *) );
 
 // slice_process_items processes all items in slice by calling the function
 // fct (item_process_fct is defined in vector.h) passed as argument.
