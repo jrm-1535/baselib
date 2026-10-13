@@ -49,7 +49,7 @@
     pointer before freeing the whole slice.
 
     For complex objects that contain pointers to other objects, it is possible
-    to call slice_finalize or pointer_slice_finalize instead of slice_free or
+    to call slice_discard or pointer_slice_discard instead of slice_free or
     pointer_slice_free, in order to first clean each item object before freeing
     the slice.
 */
@@ -110,7 +110,8 @@ extern size_t slice_cap( const slice_t *slice );
 extern size_t slice_len( const slice_t *slice );
 
 // return a pointer to the slice start item and the number of following items
-// (i.e. the slice length)
+// (i.e. the slice length). The returned pointer and length are valid as long
+// as the slice is not modified afterwards. The pointer should NOT be freed.
 extern void *slice_data_n_len( const slice_t *slice, size_t *lenp );
 
 // return the item size or 0 if the argument slice is NULL.
@@ -164,10 +165,25 @@ extern int slice_append_item( slice_t *slice_t, const void *data );
 // returns 0 in case of success, or -1 otherwise (bad slice argument).
 extern int slice_free( slice_t *slice );
 
+// delete the slice and returns the allocated data area or NULL in case of
+// failure. If the underlying vector is shared, the call fails and the slice
+// is left untouched. The caller should call slice_item_size and slice_len
+// before in order to know the actual size of the returned data area. The
+// returned array should be freed after use by calling free. If it contains
+// pointers to objects, those objects should be freed before, if needed.
+extern void *slice_free_save_data( slice_t *slice );
+
 // similar to slice_free except that it first passes a pointer to each item in
 // the slice to the function f before freeing the slice. It is intended for
 // freeing slices containing objects that must be cleaned before disposal.
-extern int slice_finalize( slice_t *slice, void (*f)( void *) );
+extern int slice_discard( slice_t *slice, void (*f)( void *) );
+
+// slice_reinitialize moves the slice bacj to its initial state, by first
+// passing a pointer to each item in the slice to the function f before
+// resetting the slice lenght to 0. This can be used to free complex objects
+// in the slice or save the itens somewhere before resetting the slice length
+// to 0.
+extern int slice_reinitialize( slice_t *slice, void (*f)( void *) );
 
 // slice_process_items processes all items in slice by calling the function
 // fct (item_process_fct is defined in vector.h) passed as argument.
@@ -215,13 +231,19 @@ extern void pointer_slice_process_items( const slice_t *slice,
                                          item_process_fct fct,
                                          void * context );
 
-// similar to slice_free except that it first passes all pointers in the slice
-// to the function f before freeing the slice. It is intended for freeing
-// slices containing complex objects that must be cleaned before disposal.
-extern int pointer_slice_finalize( slice_t *slice, void (*f)( void *) );
+// similar to pointer_slice_free except that it first passes all pointers in
+// the slice to the function f before freeing the slice. It is intended for
+// freeing slices containing pointers to complex objects that must be cleaned
+// before disposal.
+extern int pointer_slice_discard( slice_t *slice, void (*f)( void *) );
+
+// pointer_slice_reinitialize is similar to slice_reinitialize except that
+// the function f takes the pointer in slice in slice instead of a pointer
+// to the object in slice.
+extern int pointer_slice_reinitialize( slice_t *slice, void (*f)( void *) );
 
 // similar to slice_free except that it first frees all pointers in the slice
-// before freeing the slice. It is equivalent to calling pointer_slice_finalize
+// before freeing the slice. It is equivalent to calling pointer_slice_discard
 // on the slice with the standard free function.
 extern int pointer_slice_free( slice_t *slice );
 

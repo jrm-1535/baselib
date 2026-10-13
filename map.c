@@ -315,16 +315,9 @@ extern const void *map_lookup_key( const map_t *map, const void *key )
     return entry->key;
 }
 
-extern bool map_insert_entry( map_t *map, const void *key, const void *data )
+static inline bool allocate_entry( map_t *map, uint64_t hash,
+                                   const void *key, const void *data )
 {
-    if ( NULL == key || NULL == map ) {         // needed as negative get_entry is expected
-        return false;
-    }
-    uint64_t hash;
-    map_entry_t *entry = get_entry( map, key, &hash );
-    if ( NULL != entry ) {
-        return false;                           // already in map
-    }
     if ( -1 == make_room( map ) ) {             // extend if needed
         return false;                           // sorry, no memory
     }
@@ -339,6 +332,55 @@ extern bool map_insert_entry( map_t *map, const void *key, const void *data )
         map->max_collision = collisions;
     }
     ++map->nb;
+    return true;
+}
+
+extern bool map_insert_entry( map_t *map, const void *key, const void *data )
+{
+    if ( NULL == key || NULL == map ) {         // needed as negative get_entry is expected
+        return false;
+    }
+    uint64_t hash;
+    map_entry_t *entry = get_entry( map, key, &hash );
+    if ( NULL != entry ) {
+        return false;                           // already in map
+    }
+    return allocate_entry( map, hash, key, data );
+}
+
+extern bool map_upsert_entry( map_t *map, const void *key,
+                              const void *data, void **previous )
+{
+    if ( NULL == key || NULL == map ) {
+        return false;
+    }
+    uint64_t hash;
+    map_entry_t *entry = get_entry( map, key, &hash );
+    if ( NULL == entry ) {
+        return allocate_entry( map, hash, key, data );
+    }
+    if ( NULL != previous ) {
+        *previous = (void *)entry->data;
+    }
+    entry->data = data;
+    return true;
+}
+
+extern bool map_update_entry( map_t *map, const void *key,
+                              const void *data, void **previous )
+{
+    if ( NULL == key || NULL == map ) {
+        return false;
+    }
+    uint64_t hash;
+    map_entry_t *entry = get_entry( map, key, &hash );
+    if ( NULL == entry ) {
+        return false;                           // not yet in map
+    }
+    if ( NULL != previous ) {
+        *previous = (void *)entry->data;
+    }
+    entry->data = data;
     return true;
 }
 

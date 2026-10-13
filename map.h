@@ -15,7 +15,7 @@
     The table contains only void pointers to preallocated keys and data:
         key <- hash value -> data
 
-    It does not require that keys are of any particular type. In fact, keys
+    It does not require that keys be of any particular type. Actually, keys
     are never directly accessed and key "pointers" could also be used to hold
     any type that can fit in a void pointer. However, a NULL or (uint64_t)0
     key is not valid as it indicates internally an empty slot in the table.
@@ -69,8 +69,25 @@ extern int map_free(map_t *map );
 //_map) or if the map requires a re-allocation that failed (no memory).
 extern bool map_insert_entry( map_t *map, const void *key, const void *value );
 
+// uodate an exsiting entry in the map. It returns true if the entry was
+// updated or false, which can only happen if the key is NULL or an entry did
+// not exists for that key. In case of success, if the argument previous is not
+// null, the value previously associated with the key is returned (which can be
+// used to free that value).
+extern bool map_update_entry( map_t *map, const void *key,
+                              const void *value, void **previous );
+
+// uodate or insert an entry in the map. It returns true if the entry was
+// updated or inserted, or false, which can only happen if the key is NULL or
+// if the entry did not exist yet the map required a re-allocation that failed
+// due to lack of memory. In case of success, if the argument previous is not
+// null, the value previously associated with the key or NULL if the entry was
+// just inserted is returned.
+extern bool map_upsert_entry( map_t *map, const void *key,
+                              const void *value, void **previous );
+
 // delete an existing entry in the map. It returns false if the entry did not
-// exist or true otherwise. Neither key nor data pointer is free. If needed,
+// exist or true otherwise. Neither key nor data pointer is freed. If needed,
 // use lookup_entry and lookup_key to get their pointer before calling
 // map_delete_entry and free them after.
 extern bool map_delete_entry( map_t *map, const void *key );
@@ -81,12 +98,15 @@ extern const void *map_lookup_entry( const map_t *map, const void *key );
 
 // return the key pointer matching the given key with the key. It returns NULL
 // if the key  was not found in the map, otherwise the key pointer that was
-// given when the enry was inserted in the map. It's main use is for freeing
-// keys when entries are deleted.
+// given when the enry was inserted in the map. It is only useful for freeing
+// keys when entries are deleted and a non-null hash function was given (i.e.
+// it returns the original allocated string, given a string that contains a
+// copy of the original content).
 extern const void *map_lookup_key( const map_t *map, const void *key );
 
 // return the current number of entries in map
 extern size_t map_len( const map_t *map );
+
 // execute the passed function for all entries in the map. This could be used
 // to free keys and data allocated in memory before freeing the whole map. The
 // order in which keys are processed is not guaranted, although all entries at

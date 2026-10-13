@@ -58,6 +58,13 @@ extern void vector_segment_zero( vector_t * vector, size_t start, size_t len );
 // are not freed when the vector is deleted.
 extern void vector_free( vector_t *vector );
 
+// delete the vector and returns the allocated data area or NULL in case of
+// failure. If the reference count is not 1, the call fails and the vector
+// is left untouched. The caller should call vector_item_size and vector_cap
+// before in order to know the actual size of the returned data area. The
+// returned array should be freed after use by calling free.
+extern void *vector_free_save_data( vector_t *vector );
+
 // let multiple objects share a vector by incrementing its reference counter.
 // Note that this is not multi-thread safe.
 extern void vector_share( vector_t *vector );
@@ -65,7 +72,7 @@ extern void vector_share( vector_t *vector );
 // how many references point to the same vector?
 extern int vector_references( const vector_t *vector );
 
-// return the item size 0r 0 if the argument vector is NULL.
+// return the item size or 0 if the argument vector is NULL.
 extern size_t vector_item_size( const vector_t * vector );
 
 // return the current vector capacity, i.e. how may items can written in it.
@@ -75,6 +82,14 @@ extern size_t vector_cap( const vector_t *vector );
 // If the vector was shared (reference counter > 1) then a new non-shared
 // vector is created and returned. Otherwise the same vector is returned.
 extern vector_t *vector_grow( vector_t *vector );
+
+// shrink the vector, decreasing its capacity by reallocing the data area
+// such that its new capacity if the given number of items. If the given
+// number of item is larger than the current one, i.e. is the new capacity
+// would be actually larger than the current one, or if the vector is shared
+// or in case of realloc error, the call fails. It returns the new vector in
+// case of success or NULL in case of failure.
+extern vector_t *vector_shrink( vector_t *vector, size_t number );
 
 // provide a pointer to the value at a given index in the vector. Return NULL
 // if the index is equal or larger than its length.

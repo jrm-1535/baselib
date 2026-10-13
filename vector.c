@@ -166,6 +166,33 @@ extern void vector_free( vector_t *vector )
     }
 }
 
+extern void *vector_free_save_data( vector_t *vector )
+{
+    if ( NULL == vector || vector->ref_count > 1 ) {
+        return NULL;
+    }
+    void *data = vector->data;
+    vector->ref_count = 0;
+    free( vector );
+    return data;
+}
+
+extern vector_t *vector_shrink( vector_t *vector, size_t number )
+{
+    if ( NULL == vector || number > vector->number ||
+         1 < vector->ref_count ) {
+        return NULL;
+    }
+    if ( number < vector->number ) {
+        void *data = realloc( vector->data, vector->item_size * number );
+        if ( NULL == data ) {
+            return NULL;
+        }
+        vector->data = data;
+    }
+    return vector;
+}
+
 extern vector_t *vector_grow( vector_t *vector )
 {
     if ( NULL == vector ) return NULL;

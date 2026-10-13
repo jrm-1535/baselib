@@ -305,7 +305,6 @@ extern int pointer_slice_append_item( slice_t *slice, const void * data )
     return _pointer_slice_append_item( slice, data );
 }
 
-
 extern int slice_free( slice_t *slice )
 {
     if ( NULL == slice ) return -1;
@@ -313,6 +312,19 @@ extern int slice_free( slice_t *slice )
     vector_free( slice->vector );
     free( slice );
     return 0;
+}
+
+extern void * slice_free_save_data( slice_t *slice )
+{
+    if ( NULL == slice ) return NULL;
+
+    size_t item_size = _vector_item_size( slice->vector );
+    void *data = vector_free_save_data( slice->vector );
+    if ( NULL == data ) return NULL;
+
+    data = realloc( data, slice->len * item_size );
+    free( slice );
+    return data;
 }
 
 extern void slice_process_items( const slice_t *slice, item_process_fct fct,
@@ -323,7 +335,7 @@ extern void slice_process_items( const slice_t *slice, item_process_fct fct,
                           context );
 }
 
-extern int slice_finalize( slice_t *slice, void (*f)( void *) )
+extern int slice_discard( slice_t *slice, void (*f)( void *) )
 {
     if ( NULL == slice ) return -1;
 
@@ -334,7 +346,18 @@ extern int slice_finalize( slice_t *slice, void (*f)( void *) )
     return slice_free( slice );
 }
 
-extern int pointer_slice_finalize( slice_t *slice, void (*f)( void *) )
+extern int slice_reinitialize( slice_t *slice, void (*f)( void *) )
+{
+    if ( NULL == slice ) return -1;
+
+    size_t n = slice_len( slice );
+    for ( size_t i = 0; i < n; ++i ) {
+        f( slice_item_at( slice, i ) );
+    }
+    return slice_update_len( slice, 0 );
+}
+
+extern int pointer_slice_discard( slice_t *slice, void (*f)( void *) )
 {
     if ( NULL == slice ) return -1;
 
@@ -344,6 +367,17 @@ extern int pointer_slice_finalize( slice_t *slice, void (*f)( void *) )
         pointer_slice_write_item_at( slice, i, NULL ); // in case of shared vector
     }
     return slice_free( slice );
+}
+
+extern int pointer_slice_reinitialize( slice_t *slice, void (*f)( void *) )
+{
+    if ( NULL == slice ) return -1;
+
+    size_t n = slice_len( slice );
+    for ( size_t i = 0; i < n; ++i ) {
+        f( pointer_slice_item_at( slice, i ) );
+    }
+    return slice_update_len( slice, 0 );
 }
 
 extern int pointer_slice_free( slice_t *slice )
@@ -358,7 +392,7 @@ extern int pointer_slice_free( slice_t *slice )
     }
     return slice_free( slice );
 */
-    return pointer_slice_finalize( slice, free );
+    return pointer_slice_discard( slice, free );
 }
 
 extern bool slice_sort_items( slice_t *slice, comp_fct cmp )
